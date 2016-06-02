@@ -108,7 +108,7 @@ namespace GraphTask {
     while (D.bfs.size() < D.N) {
       while (i < D.bfs.size()) {
         uint32_t n = D.bfs[i];
-        for (size_t id : D.adj[n])
+        for (size_t id=0; id < D.adj[n].size(); ++id)
           for (size_t j=0; j<ec[id]->l.cs.costs.size(); j++) {
             uint32_t m = ec[id]->l.cs.costs[j].class_index - 1;
             if (!touched[m]) {
@@ -194,7 +194,7 @@ namespace GraphTask {
   void add_edge_features(Search::search&sch, task_data&D, uint32_t n, vector<example*>&ec) {
     D.cur_node = ec[n];
 
-    for (size_t i : D.adj[n]) {
+    for (size_t i=0; i<D.adj[n].size(); i++) {
       for (size_t k=0; k<D.K+1; k++) D.neighbor_predictions[k] = 0.;
       float pred_total = 0.;
 

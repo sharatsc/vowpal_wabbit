@@ -57,6 +57,11 @@ LEARNER::base_learner* scorer_setup(vw& all)
       l = &init_learner(&s, base, predict_or_learn<true, glf1>, 
 			predict_or_learn<false, glf1>);
     }
+  else if (link.compare("poisson") == 0)
+  {
+    *all.file_options << " --link=poisson ";
+    l = &init_learner(&s, base, predict_or_learn<true, expf>, predict_or_learn<false, expf>);
+  }
   else
     {
       cerr << "Unknown link function: " << link << endl;

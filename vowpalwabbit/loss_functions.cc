@@ -296,6 +296,55 @@ public:
   float tau;
 };
 
+class poisson_loss : public loss_function
+{
+public:
+  poisson_loss() {}
+
+  float getLoss(shared_data*, float prediction, float label)
+  {
+	  float exp_prediction = expf(prediction);
+    // deviance is used instead of log-likelihood
+	  return 2 * (label * (logf(label + 1e-6) - prediction) - (label - exp_prediction));
+  }
+
+  float getUpdate(float prediction, float label,float update_scale, float pred_per_update)
+  {
+    /*pred_per_pdate is ignored*/
+	  float exp_prediction = expf(prediction);
+	  return (label - exp_prediction) * update_scale/pred_per_update;
+  }
+
+  float getUnsafeUpdate(float prediction, float label,float update_scale, float pred_per_update)
+  {
+	  float exp_prediction = expf(prediction);
+	  return (label - exp_prediction) * update_scale/pred_per_update;
+  }
+
+  float getRevertingWeight(shared_data* sd, float prediction, float eta_t)
+  {
+    return 0.0f;
+  }
+
+  float getSquareGrad(float prediction, float label)
+  { 
+ 	  float exp_prediction = expf(prediction);
+    return (exp_prediction - label) * (exp_prediction - label);
+  }
+
+  float first_derivative(shared_data*, float prediction, float label)
+  {
+ 	  float exp_prediction = expf(prediction);
+    return (exp_prediction - label);
+  }
+
+  float second_derivative(shared_data*, float prediction, float label)
+  { 
+ 	  float exp_prediction = expf(prediction);
+    return exp_prediction;
+  }
+};
+
 loss_function* getLossFunction(vw& all, string funcName, float function_parameter) {
   if(funcName.compare("squared") == 0 || funcName.compare("Huber") == 0) 
     return new squaredloss();
@@ -312,7 +361,12 @@ loss_function* getLossFunction(vw& all, string funcName, float function_paramete
     return new logloss();
   } else if(funcName.compare("quantile") == 0 || funcName.compare("pinball") == 0 || funcName.compare("absolute") == 0) {
     return new quantileloss(function_parameter);
-  } else {
+  }
+  else if(funcName.compare("poisson") == 0)
+  {
+    return new poisson_loss();
+  }
+  else {
     cout << "Invalid loss function name: \'" << funcName << "\' Bailing!" << endl;
     throw exception();
   }
