@@ -36,7 +36,7 @@ def read_arguments():
     parser.add_argument('--holdout', type=str, required=True, help="holdout set")
     parser.add_argument('--vw_space', type=str, required=True, help="hyperparameter search space (must be 'quoted')")
     parser.add_argument('--outer_loss_function', default='logistic',
-                        choices=['logistic', 'roc-auc'])  # TODO: implement squared, hinge, quantile, PR-auc
+                        choices=['logistic', 'poisson', 'roc-auc'])  # TODO: implement squared, hinge, quantile, PR-auc
     parser.add_argument('--regression', action='store_true', default=False, help="""regression (continuous class labels)
                                                                         or classification (-1 or 1, default value).""")
     parser.add_argument('--plot', action='store_true', default=False, help=("Plot the results in the end. "
@@ -45,6 +45,20 @@ def read_arguments():
     args = parser.parse_args()
     return args
 
+# Map outer loss function to link functions
+LINK_FUNCTIONS_MAP = {
+        'logistic': 'logistic',
+        'roc-auc': 'logistic',
+        'poisson': 'poisson',
+        'squared': 'identity'
+}
+
+# Map outer loss function to VW loss function
+
+def poisson_loss(y, p):
+    y = np.array(y) + 1e-6
+    p = np.array(p)
+    return 2*np.mean(y*np.log(y/p) - (y-p))
 
 class HyperoptSpaceConstructor(object):
     """
@@ -217,14 +231,29 @@ class HyperOptimizer(object):
         self.param_suffix += ' %s' % (kwargs['argument'])
 
     def compose_vw_train_command(self):
-        data_part = ('vw -d %s -f %s --holdout_off -c '
+        if self.outer_loss_function in ('logistic','auc-roc'):
+                loss_function_spec = 'logistic'
+        elif self.outer_loss_function in ('poisson'):
+                loss_function_spec = 'poisson'
+        else:
+                loss_function_spec = 'squared'
+
+        loss_part = '--loss_function %s'%(loss_function_spec)
+        data_part = ('vw -d %s -f %s --holdout_off -k -c '
                      % (self.train_set, self.train_model))
-        self.train_command = ' '.join([data_part, self.param_suffix])
+        self.train_command = ' '.join([data_part, self.param_suffix,loss_part])
 
     def compose_vw_validate_command(self):
-        data_part = 'vw -t -d %s -i %s -p %s --holdout_off -c' \
+        if self.outer_loss_function in ('logistic','auc-roc'):
+                loss_function_spec = 'logistic'
+        elif self.outer_loss_function in ('poisson'):
+                loss_function_spec = 'poisson'
+        else:
+                loss_function_spec = 'squared'
+        loss_part = '--loss_function %s'%(loss_function_spec)
+        data_part = 'vw -t -d %s -i %s -p %s --holdout_off -k -c' \
                     % (self.holdout_set, self.train_model, self.holdout_pred)
-        self.validate_command = data_part
+        self.validate_command = ' '.join([data_part, loss_part])
 
     def fit_vw(self):
         self.compose_vw_train_command()
@@ -241,8 +270,8 @@ class HyperOptimizer(object):
         yh = open(self.train_set, 'r')
         self.y_true_train = []
         for line in yh:
-            self.y_true_train.append(int(line.strip()[0:2]))
-        if not self.is_regression:
+            self.y_true_train.append(float(line.split()[0].strip()))
+        if not self.is_regression and self.outer_loss_function not in ('poisson'):
             self.y_true_train = [(i + 1.) / 2 for i in self.y_true_train]
         self.logger.info("train length: %d" % len(self.y_true_train))
 
@@ -251,8 +280,8 @@ class HyperOptimizer(object):
         yh = open(self.holdout_set, 'r')
         self.y_true_holdout = []
         for line in yh:
-            self.y_true_holdout.append(int(line.strip()[0:2]))
-        if not self.is_regression:
+            self.y_true_holdout.append(float(line.split()[0].strip()))
+        if not self.is_regression and self.outer_loss_function not in ('poisson'):
             self.y_true_holdout = [(i + 1.) / 2 for i in self.y_true_holdout]
         self.logger.info("holdout length: %d" % len(self.y_true_holdout))
 
@@ -265,6 +294,10 @@ class HyperOptimizer(object):
         if self.outer_loss_function == 'logistic':
             y_pred_holdout_proba = [1. / (1 + exp(-i)) for i in y_pred_holdout]
             loss = log_loss(self.y_true_holdout, y_pred_holdout_proba)
+
+        elif self.outer_loss_function == 'poisson':
+            y_pred_holdout_proba = [exp(i) for i in y_pred_holdout]
+            loss = poisson_loss(self.y_true_holdout, y_pred_holdout_proba)
 
         elif self.outer_loss_function == 'squared':  # TODO: write it
             pass
