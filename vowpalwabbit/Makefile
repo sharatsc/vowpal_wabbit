@@ -26,6 +26,16 @@ vw_DEPS = $(patsubst %.cc,%.d,$(vw_SOURCES))
 allreduce_SOURCES = $(shell grep liballreduce_la_SOURCES Makefile.am | cut -d '=' -f 2)
 allreduce_OBJECTS = $(patsubst %.cc,%.o,$(allreduce_SOURCES))
 
+UNAME := $(shell uname)
+ifeq ($(UNAME), Linux)
+  SHARED_LIBRARY = libvw.so
+  SHARED_FLAG = -shared
+endif
+ifeq ($(UNAME), Darwin)
+  SHARED_LIBRARY = libvw.0.dylib
+  SHARED_FLAG = -dynamiclib
+endif
+
 %.d:	%.cc config.h
 	$(CXX) -std=c++0x -MM $< > $@
 
@@ -42,6 +52,7 @@ liballreduce.a: $(allreduce_OBJECTS)
 
 libvw.a: $(filter-out vw.o,$(vw_OBJECTS))
 	ar rcs $@ $+
+	$(CXX) $(FLAGS) $(SHARED_FLAG) -o $(SHARED_LIBRARY) $(STDLIBS) $(allreduce_OBJECTS) $+
 
 vw: main.o libvw.a liballreduce.a
 	$(CXX) $(FLAGS) -o $@ $< $(VWLIBS) $(STDLIBS)
@@ -53,7 +64,7 @@ install: $(BINARIES)
 	cp $(BINARIES) /usr/local/bin; cd cluster; $(MAKE) install
 
 clean:
-	rm -f  *.o *.d $(BINARIES) *~ $(MANPAGES) libvw.a liballreduce.a
+	rm -f  *.o *.d $(BINARIES) *~ $(MANPAGES) libvw.a liballreduce.a $(SHARED_LIBRARY)
 
 python: vw
 	cd .. ; $(MAKE) python
