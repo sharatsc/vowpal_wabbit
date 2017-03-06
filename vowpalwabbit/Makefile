@@ -33,7 +33,7 @@ ifeq ($(UNAME), Linux)
 endif
 ifeq ($(UNAME), Darwin)
   SHARED_LIBRARY = libvw.0.dylib
-  SHARED_FLAG = -dynamiclib
+  SHARED_FLAG = -dynamiclib -Wl,-install_name,@rpath/libvw.0.dylib
 endif
 
 %.d:	%.cc config.h
